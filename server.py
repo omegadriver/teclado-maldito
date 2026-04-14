@@ -101,7 +101,8 @@ HTML = """
     <div id="log"></div>
 
     <script>
-        const ws      = new WebSocket('ws://' + location.hostname + ':8765');
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(proto + '//' + location.host + '/ws');
         const display = document.getElementById('display');
         const status  = document.getElementById('status');
         const capture = document.getElementById('capture');
