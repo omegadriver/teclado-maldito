@@ -51,7 +51,7 @@ void typeChar(String msg) {
         Keyboard.releaseAll();
     }
 
-    else if (msg == " ")          { Keyboard.press(' ');                Keyboard.releaseAll(); }
+    else if (msg == "SPACE")      { Keyboard.press(' ');                Keyboard.releaseAll(); }
     else if (msg == "ENTER")      { Keyboard.press(KEY_RETURN);         Keyboard.releaseAll(); }
     else if (msg == "TAB")        { Keyboard.press(KEY_TAB);            Keyboard.releaseAll(); }
     else if (msg == "BACKSPACE")  { Keyboard.press(KEY_BACKSPACE);      Keyboard.releaseAll(); }
