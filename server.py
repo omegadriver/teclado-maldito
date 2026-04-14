@@ -50,6 +50,26 @@ HTML = """
             text-align: center;
             letter-spacing: 3px;
         }
+        #modifiers {
+            display: flex;
+            gap: 10px;
+        }
+        .mod-btn {
+            padding: 10px 20px;
+            font-family: monospace;
+            font-size: 13px;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+            background: #0f0f1a;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .mod-btn.active {
+            background: #00ff88;
+            color: #111;
+            border-color: #00ff88;
+        }
         #log {
             width: 420px;
             height: 160px;
@@ -70,6 +90,13 @@ HTML = """
     <h2>ESP32 Keyboard</h2>
     <div id="status">Connecting...</div>
     <input id="capture" placeholder="clique aqui e digite..." autocomplete="off" spellcheck="false" readonly />
+
+    <div id="modifiers">
+        <button class="mod-btn" id="btn-win"        onclick="toggleMod('WIN')">⊞ WIN</button>
+        <button class="mod-btn" id="btn-ctrl_alt"   onclick="toggleMod('CTRL+ALT')">CTRL+ALT</button>
+        <button class="mod-btn" id="btn-ctrl_shift" onclick="toggleMod('CTRL+SHIFT')">CTRL+SHIFT</button>
+    </div>
+
     <div id="display">—</div>
     <div id="log"></div>
 
@@ -80,8 +107,29 @@ HTML = """
         const capture = document.getElementById('capture');
         const log     = document.getElementById('log');
 
+        let activeMod = null;
+
         ws.onopen  = () => { status.textContent = 'Connected ✓';    status.style.color = '#00ff88'; addLog('WebSocket connected', 'info'); };
         ws.onclose = () => { status.textContent = 'Disconnected ✗'; status.style.color = '#ff4444'; addLog('WebSocket disconnected', 'info'); };
+
+        function toggleMod(mod) {
+            if (activeMod === mod) {
+                deactivateMod();
+            } else {
+                deactivateMod();
+                activeMod = mod;
+                document.getElementById('btn-' + mod.toLowerCase().replace('+', '_')).classList.add('active');
+                addLog(mod + ' ativado', 'info');
+            }
+            capture.focus();
+        }
+
+        function deactivateMod() {
+            if (!activeMod) return;
+            document.getElementById('btn-' + activeMod.toLowerCase().replace('+', '_')).classList.remove('active');
+            addLog(activeMod + ' desativado', 'info');
+            activeMod = null;
+        }
 
         function addLog(msg, cls='sent') {
             const d = document.createElement('div');
@@ -119,52 +167,46 @@ HTML = """
             addLog(key);
         }
 
-        // META = Windows key no Linux/Mac, equivalente ao WIN
+        const simpleMap = {
+            'Enter':     'ENTER',
+            'Tab':       'TAB',
+            'Backspace': 'BACKSPACE',
+            'Delete':    'DELETE',
+            'Escape':    'ESC',
+            'CapsLock':  'CAPSLOCK',
+            'ArrowUp':   'UP',
+            'ArrowDown': 'DOWN',
+            'ArrowLeft': 'LEFT',
+            'ArrowRight':'RIGHT',
+            ' ':         'SPACE',
+            'F1':'F1','F2':'F2','F3':'F3','F4':'F4',
+            'F5':'F5','F6':'F6','F7':'F7','F8':'F8',
+            'F9':'F9','F10':'F10','F11':'F11','F12':'F12',
+        };
+
         capture.addEventListener('keydown', function(e) {
             e.preventDefault();
 
-            const simpleMap = {
-                'Enter':     'ENTER',
-                'Tab':       'TAB',
-                'Backspace': 'BACKSPACE',
-                'Delete':    'DELETE',
-                'Escape':    'ESC',
-                'CapsLock':  'CAPSLOCK',
-                'ArrowUp':   'UP',
-                'ArrowDown': 'DOWN',
-                'ArrowLeft': 'LEFT',
-                'ArrowRight':'RIGHT',
-                ' ':         ' ',
-                'F1':'F1','F2':'F2','F3':'F3','F4':'F4',
-                'F5':'F5','F6':'F6','F7':'F7','F8':'F8',
-                'F9':'F9','F10':'F10','F11':'F11','F12':'F12',
-            };
+            const ctrl = e.ctrlKey;
+            const meta = e.metaKey;
+            const k    = e.key;
+
+            if (['Control','Shift','Alt','Meta'].includes(k)) return;
+
+            let mapped = simpleMap[k] || (k.length === 1 ? k : null);
+            if (!mapped) return;
 
             let key = null;
 
-            const ctrl  = e.ctrlKey;
-            const shift = e.shiftKey;
-            const win   = e.metaKey; // Meta = tecla Windows no Linux/Mac
-            const k     = e.key;
-
-            if (ctrl && shift && k.length === 1) {
-                key = 'CTRL+SHIFT+' + k.toUpperCase();
-            } else if (ctrl && k === 'ArrowLeft') {
-                key = 'CTRL+LEFT';
-            } else if (ctrl && k === 'ArrowRight') {
-                key = 'CTRL+RIGHT';
-            } else if (ctrl && k !== 'Control' && k.length === 1) {
-                key = 'CTRL+' + k.toUpperCase();
-            } else if (win && k !== 'Meta' && simpleMap[k]) {
-                key = 'WIN+' + simpleMap[k];
-            } else if (win && k !== 'Meta' && k.length === 1) {
-                key = 'WIN+' + k.toUpperCase();
-            } else if (shift && simpleMap[k]) {
-                key = 'SHIFT+' + simpleMap[k];
-            } else if (simpleMap[k]) {
-                key = simpleMap[k];
-            } else if (k.length === 1) {
-                key = k;
+            if (activeMod) {
+                key = activeMod + '+' + (simpleMap[k] || k.toUpperCase());
+                deactivateMod();
+            } else if (meta && k !== 'Meta') {
+                key = 'WIN+' + (simpleMap[k] || k.toUpperCase());
+            } else if (ctrl && k !== 'Control') {
+                key = 'CTRL+' + (simpleMap[k] || k.toUpperCase());
+            } else {
+                key = mapped;
             }
 
             if (key) send(key);
@@ -187,7 +229,6 @@ async def ws_handler(websocket):
     try:
         async for msg in websocket:
             print(f"[WS] → '{msg}'")
-            # envia para todos os outros clientes (ESP32)
             others = [c for c in clients if c != websocket]
             if others:
                 await asyncio.gather(*[c.send(msg) for c in others])
@@ -197,10 +238,6 @@ async def ws_handler(websocket):
         clients.discard(websocket)
         print(f"[WS] Client disconnected")
 
-async def broadcast(msg):
-    if clients:
-        await asyncio.gather(*[c.send(msg) for c in clients])
-
 async def ws_main():
     async with websockets.serve(ws_handler, "0.0.0.0", WS_PORT):
         print(f"[WS] ws://0.0.0.0:{WS_PORT}")
@@ -209,7 +246,9 @@ async def ws_main():
 def run_ws():
     asyncio.run(ws_main())
 
+# inicia websocket ao importar — funciona com gunicorn e python direto
+threading.Thread(target=run_ws, daemon=True).start()
+
 if __name__ == "__main__":
-    threading.Thread(target=run_ws, daemon=True).start()
     print("[HTTP] http://0.0.0.0:5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
